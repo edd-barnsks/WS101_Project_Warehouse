@@ -1,0 +1,677 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Stock Logger · Warehouse</title>
+  <meta name="description"
+    content="Warehouse Stock Logger — log, track and visualise your inventory in real time with a 3-D rack view." />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+
+<body>
+  <!-- Loading Screen Overlay -->
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-card">
+      <div class="loading-logo">
+        <div class="loading-logo-icon">
+          <svg width="22" height="22" viewBox="0 0 28 28" fill="none">
+            <path d="M7 20V12l7-4 7 4v8l-7 4-7-4Z" stroke="#f2f0ed" stroke-width="2" fill="none" />
+            <path d="M14 8l-7 4m7-4 7 4m-7-4v4m0 0-7 4m7-4 7 4m-7-4v8" stroke="#f2f0ed" stroke-width="1.4"
+              opacity=".5" />
+          </svg>
+        </div>
+        <span class="loading-logo-name">StockLogger</span>
+      </div>
+      <div class="spinner"></div>
+      <div class="loading-text">Initializing warehouse...</div>
+    </div>
+  </div>
+
+  <div class="layout-wrapper">
+    <div class="app-content">
+      <div class="app">
+
+        <div id="dashboardView">
+          <header>
+            <div class="header-brand">
+              <div class="header-logo-icon">
+                <svg width="18" height="18" viewBox="0 0 28 28" fill="none">
+                  <path d="M7 20V12l7-4 7 4v8l-7 4-7-4Z" stroke="#f2f0ed" stroke-width="2" fill="none" />
+                  <path d="M14 8l-7 4m7-4 7 4m-7-4v4m0 0-7 4m7-4 7 4m-7-4v8" stroke="#f2f0ed" stroke-width="1.4"
+                    opacity=".5" />
+                </svg>
+              </div>
+              <h1>StockLogger</h1>
+            </div>
+            <div class="header-actions" style="margin-left: auto;">
+              <div class="stats" id="stats"></div>
+            </div>
+          </header>
+
+          <main class="dashboard-main">
+            <section class="panel scene-wrap">
+              <div id="scene"></div>
+              <div id="tip" class="tip"></div>
+              <p class="hint">Drag to orbit · scroll to zoom</p>
+            </section>
+
+            <div class="dashboard-data-grid">
+              <section class="panel">
+                <div class="panel-head"><h2>Movement log</h2><button type="button" class="btn-outline btn-small" id="exportMovements" data-admin-only>Export CSV</button></div>
+                <div class="scroll">
+                  <table id="log"></table>
+                </div>
+              </section>
+            </div>
+          </main>
+        </div>
+
+        <div id="movementView" style="display: none;">
+          <header class="movement-header">
+            <div>
+              <p class="eyebrow">WAREHOUSE / INVENTORY</p>
+              <h1>Log a movement</h1>
+              <p class="sales-lead">Record stock entering or leaving your warehouse.</p>
+            </div>
+          </header>
+          <section class="panel movement-panel">
+            <form id="form" autocomplete="off">
+              <div class="toggle" role="group" aria-label="Movement type">
+                <button type="button" class="in active" data-type="IN">Stock in</button>
+                <button type="button" class="out" data-type="OUT">Stock out</button>
+              </div>
+              <label>SKU
+                <input id="sku" list="skus" placeholder="e.g. BLT-001" required />
+                <datalist id="skus"></datalist>
+              </label>
+              <p id="skuHint" class="field-hint" role="status"></p>
+              <fieldset id="newProductFields" class="new-product-fields" data-admin-only>
+                <legend>New product details</legend>
+                <label id="nameRow">Item name
+                  <input id="name" maxlength="150" placeholder="e.g. Hex bolts M8" />
+                </label>
+                <label id="categoryRow">Category
+                  <select id="category"><option value="">Uncategorized</option></select>
+                </label>
+                <div class="form-pair">
+                  <label>Unit price (₱)
+                    <input id="newPrice" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00" />
+                  </label>
+                  <label>Size
+                    <input id="newSize" maxlength="50" placeholder="e.g. 500 ml, XL, M8 × 40" />
+                  </label>
+                </div>
+                <div class="form-pair">
+                  <label>Unit
+                    <input id="newUnit" maxlength="20" value="pcs" list="unitList" />
+                    <datalist id="unitList"><option value="pcs"></option><option value="box"></option><option value="pack"></option><option value="kg"></option><option value="L"></option><option value="m"></option><option value="roll"></option></datalist>
+                  </label>
+                  <label>Low-stock level
+                    <input id="newReorder" type="number" min="0" step="1" value="10" inputmode="numeric" />
+                  </label>
+                </div>
+                <p class="field-hint">Only used when the SKU is new. The product is flagged as low stock when its quantity falls below the low-stock level.</p>
+              </fieldset>
+              <label>Quantity
+                <input id="qty" type="number" min="1" step="1" value="1" required />
+              </label>
+              <label>Note
+                <input id="note" placeholder="PO number, order ID, reason…" />
+              </label>
+              <button class="submit" type="submit">Save stock in</button>
+              <p id="msg" class="msg" role="status"></p>
+            </form>
+          </section>
+        </div>
+
+        <div id="salesView" style="display: none;">
+          <header class="sales-header">
+            <div>
+              <p class="eyebrow">WAREHOUSE / SALES</p>
+              <h1 id="salesPageTitle">Point of sale</h1>
+              <p class="sales-lead">Build an order from available stock and record every dispatch.</p>
+            </div>
+            <div class="sales-summary" id="salesSummary"></div>
+          </header>
+
+          <div class="sales-tabs" role="tablist" aria-label="Sales workspace">
+            <button class="sales-tab active" id="posTab" role="tab" aria-selected="true" data-sales-view="pos">Point of sale</button>
+            <button class="sales-tab" id="returnsTab" role="tab" aria-selected="false" data-sales-view="returns">Returns</button>
+          </div>
+
+          <section class="pos-layout" id="posPanel" aria-labelledby="posTab">
+            <div class="catalog-panel panel">
+              <div class="section-heading">
+                <div><p class="eyebrow">PRODUCT CATALOG</p><h2>Available items</h2></div>
+                <span class="count-chip" id="catalogCount">0 items</span>
+              </div>
+              <label class="search-field" for="productSearch">
+                <span aria-hidden="true">⌕</span>
+                <input id="productSearch" type="search" placeholder="Search products" autocomplete="off" />
+                <select id="productSort" aria-label="Sort products">
+                  <option value="name">Name (A–Z)</option>
+                  <option value="sku">SKU</option>
+                  <option value="stock">Stock</option>
+                </select>
+              </label>
+              <div id="productCatalog" class="product-catalog"></div>
+            </div>
+
+            <aside class="cart-panel panel">
+              <div class="section-heading">
+                <div><p class="eyebrow">CURRENT ORDER</p><h2>Payment</h2></div>
+                <button class="text-action" id="clearCart" type="button">Clear items</button>
+              </div>
+              <div class="cart-table-head" aria-hidden="true"><span>Item</span><span>Qty</span><span>Price</span><span>Subtotal</span></div>
+              <div class="cart-lines" id="cartLines" aria-live="polite"></div>
+              <div class="cart-footer">
+                <label class="sales-field">Customer / account<input id="saleCustomer" maxlength="80" placeholder="Walk-in customer" /></label>
+                <label class="sales-field">Order reference<input id="saleReference" maxlength="60" placeholder="Optional reference" /></label>
+                <div class="cart-total-row"><span>Subtotal</span><strong id="cartSubtotal">₱0.00</strong></div>
+                <label class="cart-total-row discount-row"><span>Discount</span><input id="discountRate" type="number" min="0" max="100" step="1" value="0" aria-label="Discount percentage" /><strong id="cartDiscount">₱0.00</strong></label>
+                <div class="cart-total-row"><span>VAT (12%)</span><strong id="cartVat">₱0.00</strong></div>
+                <div class="cart-total-row due-row"><span>Due amount</span><strong id="cartTotal">₱0.00</strong></div>
+                <label class="sales-field">Payment method<select id="paymentMethod" aria-label="Payment method"><option>Cash</option><option>Card</option><option>E-Wallet</option><option>Bank Transfer</option></select></label>
+                <label class="sales-field">Amount received<input id="amountPaid" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Exact amount" /></label>
+                <div class="cart-total-row"><span>Change</span><strong id="cartChange">₱0.00</strong></div>
+                <button class="checkout-button" id="completeSale" type="button" disabled>Proceed to pay</button>
+                <p id="saleMessage" class="sales-message" role="status"></p>
+              </div>
+            </aside>
+          </section>
+
+          <section class="returns-panel panel" id="returnsPanel" style="display:none" aria-labelledby="returnsTab">
+            <div class="section-heading returns-heading">
+              <div><p class="eyebrow">AFTER-SALE WORKFLOW</p><h2>Record a return</h2><p class="section-copy">Find a completed sale and restock returned units.</p></div>
+              <div class="section-actions"><button type="button" class="text-action" id="exportReturns" data-admin-only>Export register</button><span class="count-chip" id="returnCount">0 completed sales</span></div>
+            </div>
+            <label class="search-field return-search" for="returnSearch"><span aria-hidden="true">⌕</span><input id="returnSearch" type="search" placeholder="Search order, customer or SKU" autocomplete="off" /></label>
+            <div id="salesHistory" class="sales-history"></div>
+            <div class="return-register-wrap">
+              <h3>Return register</h3>
+              <div class="sales-table-wrap"><table class="sales-table return-register" id="returnRegister"></table></div>
+            </div>
+            <p id="returnMessage" class="sales-message" role="status"></p>
+          </section>
+
+          <section class="recent-sales panel" id="recentSalesPanel">
+            <div class="section-heading"><div><p class="eyebrow">LATEST ACTIVITY</p><h2>Recent sales</h2></div><div class="section-actions"><button type="button" class="text-action" id="exportSales" data-admin-only>Export CSV</button><button type="button" class="text-action" id="viewAllReturns">View returns <span aria-hidden="true">→</span></button></div></div>
+            <div class="sales-table-wrap"><table class="sales-table" id="recentSales"></table></div>
+          </section>
+        </div>
+
+        <div id="suppliersView" style="display: none;">
+          <header class="users-header suppliers-header">
+            <div class="users-title"><span class="users-title-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 10h.01M15 10h.01M9 14h.01M15 14h.01M10 21v-3h4v3"/></svg></span><h1>Suppliers</h1></div>
+            <div class="users-header-actions"><button type="button" class="btn-outline btn-small" id="exportSuppliers">Export CSV</button><button type="button" class="users-add-button" id="addSupplierButton"><span aria-hidden="true">＋</span> Add supplier</button></div>
+          </header>
+          <section class="users-panel suppliers-panel">
+            <label class="users-search" for="supplierSearch"><span aria-hidden="true">⌕</span><input id="supplierSearch" type="search" placeholder="Filter by name..." autocomplete="off" /></label>
+            <div class="users-table-wrap suppliers-table-wrap"><table class="users-table suppliers-table" id="suppliersTable"></table></div>
+            <div class="users-pagination" id="suppliersPagination" aria-label="Supplier list pages"></div>
+            <p id="suppliersMessage" class="users-message" role="status" aria-live="polite"></p>
+          </section>
+        </div>
+
+        <div id="productsView" style="display: none;">
+          <header class="users-header products-header">
+            <div class="users-title"><span class="users-title-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12"/></svg></span><h1>Products</h1></div>
+            <div class="users-header-actions"><button type="button" class="btn-outline btn-small" id="exportProducts" data-admin-only>Export CSV</button><button type="button" class="users-add-button" id="addProductButton" data-admin-only><span aria-hidden="true">＋</span> Add product</button></div>
+          </header>
+          <section class="users-panel products-panel">
+            <div class="users-panel-heading">
+              <div><p class="eyebrow">CATALOG &amp; STOCK</p><h2>All products</h2></div>
+              <span class="count-chip" id="productsCount">0 products</span>
+            </div>
+            <div class="products-filters">
+              <label class="users-search" for="productsSearch"><span aria-hidden="true">⌕</span><input id="productsSearch" type="search" placeholder="Search SKU, name, category or size..." autocomplete="off" /></label>
+              <select id="productsCategory" aria-label="Filter by category"><option value="">All categories</option></select>
+              <label class="check-filter"><input id="productsLowOnly" type="checkbox" /> Low stock only</label>
+            </div>
+            <div class="users-table-wrap products-table-wrap"><table class="users-table products-table" id="productsTable"></table></div>
+            <div class="users-pagination" id="productsPagination" aria-label="Product list pages"></div>
+            <p id="productsMessage" class="users-message" role="status" aria-live="polite"></p>
+          </section>
+        </div>
+
+        <div id="reportsView" style="display: none;">
+          <header class="users-header reports-header">
+            <div class="users-title"><span class="users-title-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M8 17V11M13 17V7M18 17v-4"/></svg></span><h1>Reports</h1></div>
+            <div class="users-header-actions"><button type="button" class="btn-outline btn-small" id="exportReport">Export CSV</button></div>
+          </header>
+          <section class="users-panel reports-panel" id="reportsPanel">
+            <div class="report-filters" role="group" aria-label="Report range">
+              <div class="report-presets" id="reportPresets">
+                <button type="button" data-preset="7">7 days</button>
+                <button type="button" data-preset="30" class="active">30 days</button>
+                <button type="button" data-preset="90">90 days</button>
+                <button type="button" data-preset="year">This year</button>
+              </div>
+              <label>From <input id="reportFrom" type="date" /></label>
+              <label>To <input id="reportTo" type="date" /></label>
+              <label>Group by <select id="reportGroup"><option value="day">Day</option><option value="month">Month</option><option value="year">Year</option></select></label>
+            </div>
+            <p id="reportsMessage" class="users-message" role="status" aria-live="polite"></p>
+            <div class="report-kpis" id="reportKpis"></div>
+            <div class="report-block">
+              <div class="section-heading"><div><p class="eyebrow">SALES OVER TIME</p><h2 id="reportChartTitle">Sales per day</h2></div><button type="button" class="text-action" id="reportTableToggle" aria-pressed="false">View as table</button></div>
+              <div id="reportChart" class="report-chart"></div>
+              <div id="reportChartTable" class="users-table-wrap" hidden></div>
+            </div>
+            <div class="report-grid">
+              <div class="report-block"><div class="section-heading"><div><p class="eyebrow">BEST SELLERS</p><h2>Top products</h2></div></div><div class="users-table-wrap"><table class="users-table report-table" id="reportTop"></table></div></div>
+              <div class="report-block"><div class="section-heading"><div><p class="eyebrow">LOW STOCK</p><h2>Needs restocking</h2></div><span class="count-chip" id="reportLowCount">0</span></div><div class="users-table-wrap"><table class="users-table report-table" id="reportLow"></table></div></div>
+              <div class="report-block"><div class="section-heading"><div><p class="eyebrow">HOW CUSTOMERS PAID</p><h2>Payment methods</h2></div></div><div class="share-list" id="reportPayments"></div></div>
+              <div class="report-block"><div class="section-heading"><div><p class="eyebrow">WHAT SOLD</p><h2>Sales by category</h2></div></div><div class="share-list" id="reportCategories"></div></div>
+            </div>
+          </section>
+        </div>
+
+        <div id="categoriesView" style="display: none;">
+          <header class="users-header categories-header">
+            <div class="users-title"><span class="users-title-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8"/><rect x="13" y="3" width="8" height="8"/><rect x="3" y="13" width="8" height="8"/><rect x="13" y="13" width="8" height="8"/></svg></span><h1>Categories</h1></div>
+            <button type="button" class="users-add-button" id="addCategoryButton"><span aria-hidden="true">＋</span> Add category</button>
+          </header>
+          <section class="users-panel categories-panel">
+            <label class="users-search" for="categorySearch"><span aria-hidden="true">⌕</span><input id="categorySearch" type="search" placeholder="Filter by category..." autocomplete="off" /></label>
+            <div class="users-table-wrap categories-table-wrap"><table class="users-table categories-table" id="categoriesTable"></table></div>
+            <div class="users-pagination" id="categoriesPagination" aria-label="Category list pages"></div>
+            <p id="categoriesMessage" class="users-message" role="status" aria-live="polite"></p>
+          </section>
+        </div>
+
+        <div id="auditLogsView" style="display: none;">
+          <header class="users-header audit-header">
+            <div class="users-title"><span class="users-title-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/></svg></span><h1>Audit Logs</h1></div>
+            <div class="users-header-actions"><button type="button" class="btn-outline btn-small" id="exportAudit">Export CSV</button></div>
+          </header>
+          <section class="users-panel audit-panel">
+            <label class="users-search" for="auditSearch"><span aria-hidden="true">⌕</span><input id="auditSearch" type="search" placeholder="Search module, action, user..." autocomplete="off" /></label>
+            <div class="users-table-wrap audit-table-wrap"><table class="users-table audit-table" id="auditTable"></table></div>
+            <div class="users-pagination" id="auditPagination" aria-label="Audit log pages"></div>
+          </section>
+        </div>
+
+        <div id="usersView" style="display: none;">
+          <header class="users-header">
+            <div class="users-title"><span class="users-title-icon" aria-hidden="true">♙</span><h1>Users</h1></div>
+            <div class="users-header-actions"><button type="button" class="btn-outline btn-small" id="exportUsers">Export CSV</button><button type="button" class="users-add-button" id="addUserButton"><span aria-hidden="true">＋</span> Add user</button></div>
+          </header>
+          <section class="users-panel">
+            <div class="users-panel-heading">
+              <div><p class="eyebrow">ACCESS MANAGEMENT</p><h2>Workspace users</h2></div>
+              <span class="count-chip" id="userCount">0 users</span>
+            </div>
+            <label class="users-search" for="userSearch"><span aria-hidden="true">⌕</span><input id="userSearch" type="search" placeholder="Filter by username..." autocomplete="off" /></label>
+            <div class="users-table-wrap"><table class="users-table" id="usersTable"></table></div>
+            <div class="users-pagination" id="usersPagination" aria-label="User list pages"></div>
+            <p id="usersMessage" class="users-message" role="status" aria-live="polite"></p>
+          </section>
+        </div>
+
+        <div id="settingsView" style="display: none;">
+          <div class="settings-header" style="display:flex; justify-content:space-between; align-items:center;">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round" style="width:18px; height:18px;">
+                <circle cx="12" cy="12" r="3" />
+                <path
+                  d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+              <h2>Settings</h2>
+            </div>
+
+          </div>
+
+          <div class="settings-cards">
+            <!-- Username Card -->
+            <div class="panel settings-card">
+              <div class="sc-info">
+                <h3>Username</h3>
+                <div style="display:flex; align-items:center; gap:8px; margin-top:4px;">
+                  <code id="settingUser"
+                    style="font-family:var(--mono); font-size:13px; color:var(--text);">—</code>
+                  <span id="settingRole"
+                    style="font-size:10px; color:var(--text); font-family:var(--mono); background:var(--accent-soft); border:1px solid var(--line); padding:2px 8px; letter-spacing:0.08em; text-transform:uppercase;"></span>
+                </div>
+              </div>
+              <button id="openChangeUsername" class="btn-outline">Change</button>
+            </div>
+
+            <!-- Password Card -->
+            <div class="panel settings-card">
+              <div class="sc-info">
+                <h3>Password</h3>
+                <div style="display:flex; align-items:center; gap:8px; margin-top:4px;">
+                  <code id="settingPassDisplay"
+                    style="font-family:var(--mono); font-size:13px; color:var(--text); letter-spacing:0.12em;">••••••••</code>
+                  <span style="font-size:10px; color:var(--muted);">stored securely, never shown</span>
+                </div>
+              </div>
+              <button id="openChangePassword" class="btn-outline">Change</button>
+            </div>
+
+            <!-- Logout Card -->
+            <div class="panel settings-card">
+              <div class="sc-info">
+                <h3>Log out</h3>
+                <p>You will need to log in again afterwards</p>
+              </div>
+              <button id="logoutBtn" class="btn-danger">Log out</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="supplierModal" class="settings-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="supplierModalTitle">
+          <div class="settings-modal supplier-modal">
+            <button class="settings-modal-close" id="closeSupplierModal" type="button" aria-label="Close">×</button>
+            <div class="smodal-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 10h.01M15 10h.01M9 14h.01M15 14h.01M10 21v-3h4v3"/></svg></div>
+            <h3 id="supplierModalTitle" class="smodal-title">Add supplier</h3>
+            <p class="smodal-sub">Keep supplier contact details handy for purchasing and stock planning.</p>
+            <form id="supplierForm" class="smodal-form" autocomplete="off">
+              <input id="supplierId" type="hidden" />
+              <div class="smodal-field"><label for="supplierName">Supplier name</label><input id="supplierName" maxlength="100" required placeholder="e.g. Stark Industries" /></div>
+              <div class="smodal-field"><label for="supplierContact">Contact person</label><input id="supplierContact" maxlength="100" required placeholder="Full name" /></div>
+              <div class="user-form-grid">
+                <div class="smodal-field"><label for="supplierPhone">Phone number</label><input id="supplierPhone" type="tel" maxlength="40" required placeholder="Phone number" /></div>
+                <div class="smodal-field"><label for="supplierEmail">Email</label><input id="supplierEmail" type="email" maxlength="120" required placeholder="name@example.com" /></div>
+              </div>
+              <div class="smodal-field"><label for="supplierAddress">Address</label><input id="supplierAddress" maxlength="160" required placeholder="City, region" /></div>
+              <label class="user-active-toggle"><input id="supplierActive" type="checkbox" checked /> Active supplier</label>
+              <p id="supplierFormMessage" class="smodal-msg"></p>
+              <div class="smodal-actions"><button type="button" id="cancelSupplierModal" class="btn-outline">Cancel</button><button type="submit" class="btn-auth" id="saveSupplierButton" style="flex:1;">Add supplier</button></div>
+            </form>
+          </div>
+        </div>
+
+        <div id="categoryModal" class="settings-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="categoryModalTitle">
+          <div class="settings-modal category-modal">
+            <button class="settings-modal-close" id="closeCategoryModal" type="button" aria-label="Close">×</button>
+            <div class="smodal-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8"/><rect x="13" y="3" width="8" height="8"/><rect x="3" y="13" width="8" height="8"/><rect x="13" y="13" width="8" height="8"/></svg></div>
+            <h3 id="categoryModalTitle" class="smodal-title">Add category</h3>
+            <p class="smodal-sub">Organize the products in your inventory.</p>
+            <form id="categoryForm" class="smodal-form" autocomplete="off">
+              <input id="categoryId" type="hidden" />
+              <div class="smodal-field"><label for="categoryName">Category name</label><input id="categoryName" maxlength="60" required placeholder="e.g. Tools" /></div>
+              <p id="categoryFormMessage" class="smodal-msg"></p>
+              <div class="smodal-actions"><button type="button" id="cancelCategoryModal" class="btn-outline">Cancel</button><button type="submit" class="btn-auth" id="saveCategoryButton" style="flex:1;">Add category</button></div>
+            </form>
+          </div>
+        </div>
+
+        <div id="productModal" class="settings-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="productModalTitle">
+          <div class="settings-modal product-modal">
+            <button class="settings-modal-close" id="closeProductModal" type="button" aria-label="Close">×</button>
+            <div class="smodal-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12"/></svg></div>
+            <h3 id="productModalTitle" class="smodal-title">Add product</h3>
+            <p class="smodal-sub" id="productModalSub">Add a product to the catalog and the 3D rack.</p>
+            <form id="productForm" class="smodal-form" autocomplete="off">
+              <input id="productId" type="hidden" />
+              <div class="user-form-grid">
+                <div class="smodal-field"><label for="pfSku">SKU</label><input id="pfSku" maxlength="40" placeholder="Auto-numbered if blank" /></div>
+                <div class="smodal-field"><label for="pfCategory">Category</label><select id="pfCategory"><option value="">Uncategorized</option></select></div>
+              </div>
+              <div class="smodal-field"><label for="pfName">Product name</label><input id="pfName" maxlength="150" required placeholder="e.g. Hex bolts M8" /></div>
+              <div class="user-form-grid">
+                <div class="smodal-field"><label for="pfPrice">Unit price (₱)</label><input id="pfPrice" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00" /></div>
+                <div class="smodal-field"><label for="pfSize">Size</label><input id="pfSize" maxlength="50" placeholder="e.g. 500 ml, XL" /></div>
+              </div>
+              <div class="user-form-grid">
+                <div class="smodal-field"><label for="pfUnit">Unit</label><input id="pfUnit" maxlength="20" value="pcs" list="unitList" /></div>
+                <div class="smodal-field"><label for="pfReorder">Low-stock level</label><input id="pfReorder" type="number" min="0" step="1" value="10" inputmode="numeric" /></div>
+              </div>
+              <div class="user-form-grid">
+                <div class="smodal-field" id="pfStockField"><label for="pfStock">Opening stock</label><input id="pfStock" type="number" min="0" step="1" value="0" inputmode="numeric" /></div>
+                <div class="smodal-field"><label for="pfSlot">Rack position</label><select id="pfSlot"></select></div>
+              </div>
+              <p class="field-hint" id="pfStockNote"></p>
+              <p id="productFormMessage" class="smodal-msg"></p>
+              <div class="smodal-actions"><button type="button" id="cancelProductModal" class="btn-outline">Cancel</button><button type="submit" class="btn-auth" id="saveProductButton" style="flex:1;">Add product</button></div>
+            </form>
+          </div>
+        </div>
+
+        <div id="receiptModal" class="settings-modal-overlay" role="dialog" aria-modal="true" aria-label="Sales receipt">
+          <div class="settings-modal receipt-modal">
+            <button class="settings-modal-close no-print" id="closeReceiptModal" type="button" aria-label="Close">×</button>
+            <div id="receiptPaper" class="receipt-paper"></div>
+            <p id="receiptMessage" class="smodal-msg no-print"></p>
+            <div class="smodal-actions no-print"><button type="button" id="closeReceiptButton" class="btn-outline">Close</button><button type="button" class="btn-auth" id="printReceiptButton" style="flex:1;">Print receipt</button></div>
+          </div>
+        </div>
+
+        <div id="auditDetailModal" class="settings-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="auditDetailTitle">
+          <div class="settings-modal audit-detail-modal">
+            <button class="settings-modal-close" id="closeAuditDetail" type="button" aria-label="Close">×</button>
+            <div class="smodal-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/></svg></div>
+            <h3 id="auditDetailTitle" class="smodal-title">Audit entry</h3>
+            <dl class="audit-detail-list" id="auditDetailContent"></dl>
+            <div class="smodal-actions"><button type="button" id="closeAuditDetailButton" class="btn-auth" style="flex:1;">Close</button></div>
+          </div>
+        </div>
+
+        <div id="userModal" class="settings-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="userModalTitle">
+          <div class="settings-modal user-modal">
+            <button class="settings-modal-close" id="closeUserModal" type="button" aria-label="Close">×</button>
+            <div class="smodal-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+            <h3 id="userModalTitle" class="smodal-title">Add user</h3>
+            <p class="smodal-sub">Create a workspace account and choose its access role.</p>
+            <form id="userForm" class="smodal-form" autocomplete="off">
+              <input id="userId" type="hidden" />
+              <div class="user-form-grid">
+                <div class="smodal-field"><label for="userFirstName">First name</label><input id="userFirstName" maxlength="60" required /></div>
+                <div class="smodal-field"><label for="userLastName">Last name</label><input id="userLastName" maxlength="60" required /></div>
+              </div>
+              <div class="smodal-field"><label for="userEmail">Email</label><input id="userEmail" type="email" maxlength="120" required /></div>
+              <div class="user-form-grid">
+                <div class="smodal-field"><label for="userUsername">Username</label><input id="userUsername" maxlength="50" required autocomplete="off" /></div>
+                <div class="smodal-field"><label for="userRole">Role</label><select id="userRole"><option value="admin">Admin</option><option value="employee">Cashier</option></select></div>
+              </div>
+              <div class="smodal-field" id="userPasswordField"><label for="userPassword" id="userPasswordLabel">Password</label><input id="userPassword" type="password" minlength="8" maxlength="72" autocomplete="new-password" placeholder="At least 8 characters" /></div>
+              <label class="user-active-toggle"><input id="userActive" type="checkbox" checked /> Active account</label>
+              <p id="userFormMessage" class="smodal-msg"></p>
+              <div class="smodal-actions"><button type="button" id="cancelUserModal" class="btn-outline">Cancel</button><button type="submit" class="btn-auth" id="saveUserButton" style="flex:1;">Add user</button></div>
+            </form>
+          </div>
+        </div>
+
+        <!-- ── Change Username Modal ── -->
+        <div id="usernameModal" class="settings-modal-overlay" role="dialog" aria-modal="true"
+          aria-labelledby="umTitle">
+          <div class="settings-modal">
+            <button class="settings-modal-close" id="closeUsernameModal" aria-label="Close">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+            <div class="smodal-icon"
+              style="background:var(--accent-soft); border-color:var(--line); color:var(--text);">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+            </div>
+            <h3 id="umTitle" class="smodal-title">Change Username</h3>
+            <p class="smodal-sub">Enter your current password to confirm, then choose a new username.</p>
+            <form id="usernameForm" class="smodal-form" autocomplete="off">
+              <div class="smodal-field">
+                <label for="unCurrentPass">Current Password</label>
+                <input type="password" id="unCurrentPass" placeholder="Your current password" required />
+              </div>
+              <div class="smodal-field">
+                <label for="unNewName">New Username</label>
+                <input type="text" id="unNewName" placeholder="e.g. john_admin" required autocomplete="off" />
+              </div>
+              <p id="unMsg" class="smodal-msg"></p>
+              <div class="smodal-actions">
+                <button type="button" id="cancelUsernameModal" class="btn-outline">Cancel</button>
+                <button type="submit" class="btn-auth" style="flex:1;">Save Username</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- ── Change Password Modal ── -->
+        <div id="passwordModal" class="settings-modal-overlay" role="dialog" aria-modal="true"
+          aria-labelledby="pmTitle">
+          <div class="settings-modal">
+            <button class="settings-modal-close" id="closePasswordModal" aria-label="Close">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+            <div class="smodal-icon"
+              style="background:rgba(45,138,78,.06); border-color:rgba(45,138,78,.2); color:#2d8a4e;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="11" width="18" height="11" rx="0" ry="0" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+            </div>
+            <h3 id="pmTitle" class="smodal-title">Change Password</h3>
+            <p class="smodal-sub">Enter your current password, then choose a strong new one.</p>
+            <form id="passwordForm" class="smodal-form" autocomplete="off">
+              <div class="smodal-field">
+                <label for="pwCurrentPass">Current Password</label>
+                <input type="password" id="pwCurrentPass" placeholder="Your current password" required />
+              </div>
+              <div class="smodal-field">
+                <label for="pwNewPass">New Password</label>
+                <input type="password" id="pwNewPass" placeholder="At least 8 characters" maxlength="72" required />
+              </div>
+              <div class="smodal-field">
+                <label for="pwConfirmPass">Confirm New Password</label>
+                <input type="password" id="pwConfirmPass" placeholder="Repeat new password" required />
+              </div>
+              <p id="pwMsg" class="smodal-msg"></p>
+              <div class="smodal-actions">
+                <button type="button" id="cancelPasswordModal" class="btn-outline">Cancel</button>
+                <button type="submit" class="btn-auth" style="flex:1;">Save Password</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <footer class="global-footer">
+      <nav class="footer-nav">
+        <a href="#" class="nav-item active" id="navDashboard">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+            <polyline points="9 22 9 12 15 12 15 22" />
+          </svg>
+          <span class="nav-label">Dashboard</span>
+        </a>
+
+        <div class="nav-group sales-nav-group" id="salesNavGroup">
+          <button class="nav-item has-submenu" aria-expanded="false" aria-controls="salesSubmenu">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="2" width="16" height="20" rx="2" ry="2" />
+              <line x1="8" y1="6" x2="16" y2="6" />
+              <line x1="16" y1="14" x2="16.01" y2="14" />
+              <line x1="12" y1="14" x2="12.01" y2="14" />
+              <line x1="8" y1="14" x2="8.01" y2="14" />
+              <line x1="16" y1="10" x2="16.01" y2="10" />
+              <line x1="12" y1="10" x2="12.01" y2="10" />
+              <line x1="8" y1="10" x2="8.01" y2="10" />
+              <line x1="16" y1="18" x2="16.01" y2="18" />
+              <line x1="12" y1="18" x2="12.01" y2="18" />
+              <line x1="8" y1="18" x2="8.01" y2="18" />
+            </svg>
+            <span class="nav-label">Sales</span>
+           
+          </button>
+          <div class="nav-submenu" id="salesSubmenu">
+            <a href="#sales-pos" data-sales-destination="pos">POS</a>
+            <a href="#sales-returns" data-sales-destination="returns">Return</a>
+          </div>
+        </div>
+
+        <div class="nav-group" id="inventoryNavGroup">
+          <button class="nav-item has-submenu">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <line x1="16.5" y1="9.4" x2="7.5" y2="4.21" />
+              <path
+                d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+              <line x1="12" y1="22.08" x2="12" y2="12" />
+            </svg>
+            <span class="nav-label">Inventory</span>
+          </button>
+          <div class="nav-submenu dropup">
+            <a href="#products" data-inventory-destination="products">Products</a>
+            <a href="#movement" data-inventory-destination="movement">Log stock</a>
+            <a href="#categories" data-inventory-destination="categories" data-admin-only>Categories</a>
+          </div>
+        </div>
+
+        <a href="#suppliers" class="nav-item" id="navSuppliers" data-admin-only>
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+            <circle cx="12" cy="8" r="2.5" />
+            <line x1="9" y1="13" x2="15" y2="13" />
+          </svg>
+          <span class="nav-label">Suppliers</span>
+        </a>
+
+        <a href="#reports" class="nav-item" id="navReports" data-admin-only>
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3v18h18" />
+            <path d="M8 17V11M13 17V7M18 17v-4" />
+          </svg>
+          <span class="nav-label">Reports</span>
+        </a>
+
+        <a href="#audit-logs" class="nav-item" id="navAuditLogs" data-admin-only>
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="16" y1="13" x2="8" y2="13" />
+            <line x1="16" y1="17" x2="8" y2="17" />
+            <polyline points="10 9 9 9 8 9" />
+          </svg>
+          <span class="nav-label">Audit Logs</span>
+        </a>
+
+        <a href="#users" class="nav-item" id="navUsers" data-admin-only>
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+          <span class="nav-label">Users</span>
+        </a>
+
+        <a href="#" class="nav-item" id="navSettings">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3" />
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+          <span class="nav-label">Settings</span>
+        </a>
+      </nav>
+    </footer>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+
+</html>
