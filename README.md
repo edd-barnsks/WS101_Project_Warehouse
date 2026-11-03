@@ -14,8 +14,6 @@ Place .htaccess in the root folder (htdocs) (copy/cut it from the backend folder
 ____________________________________________________
 You need [Node.js](https://nodejs.org) **20.19 or newer** (or 22.12+).
 
-cd frontend
-
 npm install
 
 npm run dev
